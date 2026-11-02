@@ -1,9 +1,9 @@
 export const SCHEMA_VERSION = 3;
 export const SCENE_TYPES = ['concept','comparison','timeline','process','network','chart','table','model','media'];
 export const SOURCE_KINDS = ['pdf','pptx','docx','xlsx','csv','txt','md','json','gltf','glb'];
-export function validateScene(scene,evidenceIds=new Set()) {
+export function validateScene(scene,evidenceIds=new Set(),allowedTypes=SCENE_TYPES) {
  const errors=[];
- if(!scene||typeof scene.id!=='string'||!SCENE_TYPES.includes(scene.type)) errors.push('Invalid scene identity or type');
+ if(!scene||typeof scene.id!=='string'||!allowedTypes.includes(scene.type)) errors.push('Invalid scene identity or type');
  if(!Array.isArray(scene?.nodes)) errors.push('Nodes array required');
  for(const node of scene?.nodes||[]) {
   if(!node.id||!node.type||!Array.isArray(node.evidenceIds))errors.push('Node missing identity or evidence list');
