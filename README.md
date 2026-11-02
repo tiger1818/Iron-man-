@@ -8,7 +8,7 @@ Open `index.html` through a local HTTP server (for example `python -m http.serve
 ## Features implemented
 - Three.js WebGL interactive 3D geometry and labels, orbit rotation and zoom
 - Editable slides and nodes; orbit, grid and timeline arrangements
-- Text, Markdown, CSV and JSON-as-text imports (2 MB maximum)
+- Text, Markdown, CSV, JSON, PDF, DOCX, PPTX and spreadsheet extraction (15 MB maximum; third-party parsers load on demand)
 - Local autosave, JSON project export and import
 - Presentation dialog with a separate 3D canvas
 - Keyboard and mouse fallback
@@ -17,7 +17,7 @@ Open `index.html` through a local HTTP server (for example `python -m http.serve
 
 ## Not implemented
 - AI topic research, semantic content-to-3D generation, true physical 3D model synthesis
-- PDF/DOCX/PPTX/XLSX parsing, source citations and OCR
+- OCR, exact document layout reproduction, source citations and verification of extracted tables/figures
 - Cloud database sync, accounts, team collaboration or version history
 - Full six-gesture recognition and gesture calibration
 - Professional presenter rehearsal, video recording or genuine AR
