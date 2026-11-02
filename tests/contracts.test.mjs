@@ -4,3 +4,6 @@ test('does not chart incomplete numeric series',()=>{assert.equal(chartSpec({hea
 test('preserves exact values and zero baseline',()=>{const c=chartSpec({headers:['Year','Revenue'],rows:[['2025','€100'],['2026','€200']]});assert.equal(c.ok,true);assert.equal(c.min,0);assert.equal(c.series[0].values[1],200);assert.equal(c.sourceValues[1][1],'€200')});
 test('recognizes quoted CSV and preserves evidence',()=>{const d=compileEvidence('Year,Revenue\n"2025, FY",€100\n2026,€200',{title:'Finance',sourceName:'source.csv'});assert.equal(d.slides[0].kind,'data');assert.equal(d.slides[0].table.rows[0][0],'2025, FY');assert.equal(validateEvidence(d).valid,true)});
 test('does not infer relationships from prose',()=>{const d=compileEvidence('Market growth\nCosts increased',{title:'Analysis'});assert.equal(d.slides[0].kind,'concept');assert.equal(d.slides[0].items.length,2)});
+
+test('rejects mixed currency and percentages',()=>{assert.equal(chartSpec({headers:['Period','Revenue'],rows:[['2025','€100'],['2026','$200']]}).ok,false);assert.equal(chartSpec({headers:['Period','Margin'],rows:[['2025','10%'],['2026','12']]}).ok,false)});
+test('rejects duplicate labels and ungrounded categories',()=>{assert.equal(chartSpec({headers:['Year','Revenue'],rows:[['2025','100'],['2025','200']]}).ok,false)});
