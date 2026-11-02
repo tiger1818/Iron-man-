@@ -30,3 +30,12 @@ In GitHub repository Settings → Pages → Build and deployment, choose **GitHu
 
 ## Known limitations
 The app requires network access for Three.js and MediaPipe modules. Real-device browser and camera testing are pending. Import of JSON via the source-file input treats it as text; project JSON import is the separate **Import project** action. This release should not be relied upon for an important live event without rehearsing it on the actual laptop.
+
+
+## Renderer architecture (current)
+- `evidence-compiler.js` converts explicit source lines and structured CSV tables into scenes and evidence locators.
+- `visual-contract.js` rejects missing, mixed or unsupported numerical series rather than inventing data.
+- `spatial-renderer.js` builds real Three.js geometry: structured readable concept panels or value-faithful 3D bar charts with numeric axes and source-value labels.
+- **No invented relationships:** concept panels are not automatically connected. Uploaded 3D meshes, CAD assembly inspection, semantic diagram inference, and physically accurate model generation are not yet supported.
+- `e2e/studio.spec.js` and `.github/workflows/browser.yml` provide Chromium smoke tests. Verify green CI and rehearse with the actual laptop before presenting.
+- The current product is a functional **alpha under verification**, not a finished or fully tested professional product.
