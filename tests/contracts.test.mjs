@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {chartSpec,numberValue} from '../visual-contract.js';import {compileEvidence,validateEvidence} from '../evidence-compiler.js';
+test('parses currency, negative and percent values',()=>{assert.equal(numberValue('€1,250.50'),1250.5);assert.equal(numberValue('-12%'),-12);assert.equal(numberValue('unknown'),null)});
+test('does not chart incomplete numeric series',()=>{assert.equal(chartSpec({headers:['Year','Revenue'],rows:[['2025','100'],['2026','N/A']]}).ok,false)});
+test('preserves exact values and zero baseline',()=>{const c=chartSpec({headers:['Year','Revenue'],rows:[['2025','€100'],['2026','€200']]});assert.equal(c.ok,true);assert.equal(c.min,0);assert.equal(c.series[0].values[1],200);assert.equal(c.sourceValues[1][1],'€200')});
+test('recognizes quoted CSV and preserves evidence',()=>{const d=compileEvidence('Year,Revenue\n"2025, FY",€100\n2026,€200',{title:'Finance',sourceName:'source.csv'});assert.equal(d.slides[0].kind,'data');assert.equal(d.slides[0].table.rows[0][0],'2025, FY');assert.equal(validateEvidence(d).valid,true)});
+test('does not infer relationships from prose',()=>{const d=compileEvidence('Market growth\nCosts increased',{title:'Analysis'});assert.equal(d.slides[0].kind,'concept');assert.equal(d.slides[0].items.length,2)});
