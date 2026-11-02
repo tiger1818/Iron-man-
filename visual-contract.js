@@ -13,9 +13,12 @@ export function chartSpec(table) {
  if(!series.length)return {ok:false,reason:'No fully numeric series; retaining the exact source table'};
  const labels=table.rows.map(row=>String(row[0]??''));
  if(labels.length>20)return {ok:false,reason:'More than 20 categories; retaining the readable table'};
+ const units=series.map(serie=>{const raw=table.rows.map(row=>String(row[serie.index]??''));const types=raw.map(v=>v.includes('%')?'percent':/[€]/.test(v)?'EUR':/[$]/.test(v)?'USD':/[£]/.test(v)?'GBP':'unmarked');return new Set(types).size===1?types[0]:'mixed';});
+ if(units.includes('mixed')||new Set(units).size>1)return {ok:false,reason:'Mixed or inconsistent units: show source table instead'};
+ if(new Set(labels).size!==labels.length)return {ok:false,reason:'Duplicate category labels: show source table instead'};
  const values=series.flatMap(s=>s.values), min=Math.min(0,...values),max=Math.max(0,...values);
  if(max===min)return {ok:false,reason:'No meaningful numeric range'};
  const percent=series.every(s=>s.values.every((_,i)=>String(table.rows[i][s.index]).includes('%')));
  const currency=series.every(s=>s.values.every((_,i)=>/[$€£]/.test(String(table.rows[i][s.index]))));
- return {ok:true,labels,series,min,max,unit:percent?'%':currency?'currency':'unspecified',sourceValues:table.rows};
+ return {ok:true,labels,series,min,max,unit:units[0]==='percent'?'%':units[0],sourceValues:table.rows};
 }
