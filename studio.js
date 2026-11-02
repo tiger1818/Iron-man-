@@ -1,6 +1,7 @@
 import * as THREE from 'https://esm.sh/three@0.170.0';
 import {extractDocument} from './document-import.js';
 import {compileEvidence,validateEvidence} from './evidence-compiler.js';
+import {chartSpec} from './visual-contract.js';
 const $=id=>document.getElementById(id), uid=()=>crypto.randomUUID(), clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 let deck={title:'Spatial Presentation System',selected:0,slides:[]}, tracking=null;
 const saved=localStorage.getItem('spatial-studio-v1');try{if(saved)deck=validate(JSON.parse(saved))}catch{}
@@ -10,7 +11,28 @@ const status=t=>$('status').textContent=t;
 function generate(){const topic=$('topic').value.trim(),source=$('source').value.trim();if(!topic||!source)return status('Enter title and source content first.');if(deck.slides.length&&!confirm('Replace scenes? Export a backup first.'))return;try{const result=compileEvidence(source,{title:topic,sourceName:window.currentSourceName||'Pasted source'});deck={title:result.title,selected:0,slides:result.slides,evidence:result.evidence,warnings:result.warnings,sourceName:result.sourceName};render();save();status('Compiled '+result.slides.length+' source-grounded scenes, '+result.evidence.length+' evidence references. '+result.warnings.join(' '))}catch(err){status('Compilation failed: '+err.message)}}
 function makeWorld(canvas){const r=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});r.setPixelRatio(Math.min(devicePixelRatio,2));r.outputColorSpace=THREE.SRGBColorSpace;const s=new THREE.Scene();const c=new THREE.PerspectiveCamera(50,1,.1,100);c.position.set(0,0,13);const g=new THREE.Group();s.add(g);s.add(new THREE.AmbientLight(0xffffff,1.5));const light=new THREE.PointLight(0x5bdcf8,80);light.position.set(3,5,7);s.add(light);return {r,s,c,g,canvas}}
 const main=makeWorld($('gl')), live=makeWorld($('presentCanvas'));let yaw=-.25,pitch=.15,zoom=13;
-function sceneNodes(world,slide){while(world.g.children.length){const o=world.g.children[0];world.g.remove(o);o.geometry?.dispose();if(o.material){if(o.material.map)o.material.map.dispose();o.material.dispose()}}if(!slide)return;const n=slide.items.length;const material=new THREE.MeshStandardMaterial({color:0x1687b0,metalness:.65,roughness:.23,emissive:0x073a54});slide.items.forEach((item,i)=>{let x,y,z;if(slide.layout==='line'){x=(i-(n-1)/2)*1.65;y=0;z=0}else if(slide.layout==='grid'){x=(i%3-1)*2.4;y=(1-Math.floor(i/3))*2.3;z=0}else{const a=i*Math.PI*2/Math.max(1,n);x=Math.cos(a)*3.1;y=Math.sin(a)*2.1;z=Math.sin(a*2)*.8}const mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.55,1),material.clone());mesh.position.set(x,y,z);mesh.userData.index=i;world.g.add(mesh);const spr=labelSprite(item.text);spr.position.set(x,y-1,z);world.g.add(spr)});if(n>1){const points=slide.items.map((_,i)=>world.g.children[i*2].position.clone());const geo=new THREE.BufferGeometry().setFromPoints(points);const line=new THREE.LineLoop(geo,new THREE.LineBasicMaterial({color:0x2b7f9e,transparent:true,opacity:.6}));world.g.add(line)}}
+function sceneNodes(world,slide){while(world.g.children.length){const o=world.g.children[0];world.g.remove(o);o.geometry?.dispose();if(o.material){if(o.material.map)o.material.map.dispose();o.material.dispose()}}if(!slide)return;if(slide.table){const spec=chartSpec(slide.table);if(spec.ok){drawChart(world,spec);return}}const n=slide.items.length;const material=new THREE.MeshStandardMaterial({color:0x1687b0,metalness:.65,roughness:.23,emissive:0x073a54});slide.items.forEach((item,i)=>{let x,y,z;if(slide.layout==='line'){x=(i-(n-1)/2)*1.65;y=0;z=0}else if(slide.layout==='grid'){x=(i%3-1)*2.4;y=(1-Math.floor(i/3))*2.3;z=0}else{const a=i*Math.PI*2/Math.max(1,n);x=Math.cos(a)*3.1;y=Math.sin(a)*2.1;z=Math.sin(a*2)*.8}const mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.55,1),material.clone());mesh.position.set(x,y,z);mesh.userData.index=i;world.g.add(mesh);const spr=labelSprite(item.text);spr.position.set(x,y-1,z);world.g.add(spr)});if(n>1){const points=slide.items.map((_,i)=>world.g.children[i*2].position.clone());const geo=new THREE.BufferGeometry().setFromPoints(points);const line=new THREE.LineLoop(geo,new THREE.LineBasicMaterial({color:0x2b7f9e,transparent:true,opacity:.6}));world.g.add(line)}}
+function drawChart(world,spec){
+ const {labels,series,min,max}=spec;
+ const width=8.8, height=5, bottom=-2.6, range=max-min;
+ const axisMat=new THREE.LineBasicMaterial({color:0x7b9eb4});
+ const addLine=(points,material=axisMat)=>{const geo=new THREE.BufferGeometry().setFromPoints(points.map(p=>new THREE.Vector3(...p)));world.g.add(new THREE.Line(geo,material))};
+ const zeroY=bottom+(0-min)/range*height;
+ addLine([[-4.7,zeroY,0],[4.8,zeroY,0]]);
+ for(let t=0;t<=4;t++){const value=min+(max-min)*t/4,y=bottom+height*t/4;addLine([[-4.7,y,0],[4.8,y,0]],new THREE.LineBasicMaterial({color:0x315067,transparent:true,opacity:.45}));const mark=labelSprite(Number(value.toPrecision(4)).toLocaleString());mark.position.set(-5.45,y,0);mark.scale.set(1.2,.26,1);world.g.add(mark)}
+ const colors=[0x38c8ed,0xe4b968,0x9aa9ff,0x65d8ac];
+ const n=labels.length,groupWidth=width/n,barWidth=Math.min(.75,groupWidth*.8/series.length);
+ labels.forEach((label,i)=>{
+   const center=-4.2+(i+.5)*groupWidth;
+   const tick=labelSprite(label);tick.position.set(center,-3.08,.1);tick.scale.set(Math.min(2.2,groupWidth*.96),.36,1);world.g.add(tick);
+   series.forEach((serie,j)=>{const v=serie.values[i];const h=Math.max(.012,Math.abs(v)/range*height),y=zeroY+(v>=0?h/2:-h/2);
+     const bar=new THREE.Mesh(new THREE.BoxGeometry(barWidth,h,.48),new THREE.MeshStandardMaterial({color:colors[j],metalness:.2,roughness:.4}));
+     bar.position.set(center+(j-(series.length-1)/2)*barWidth,y,0);bar.userData={value:v,label,series:serie.name};world.g.add(bar);
+     const valueLabel=labelSprite(String(spec.sourceValues[i][serie.index]));valueLabel.position.set(bar.position.x,v>=0?y+h/2+.33:y-h/2-.33,.25);valueLabel.scale.set(Math.max(.5,barWidth*1.6),.28,1);world.g.add(valueLabel);
+   });
+ });
+ series.forEach((serie,i)=>{const label=labelSprite(serie.name);label.position.set(-3.5+i*2.25,3.15,.1);label.scale.set(2,.38,1);world.g.add(label)});
+}
 function labelSprite(text){const c=document.createElement('canvas');c.width=768;c.height=160;const ctx=c.getContext('2d');ctx.fillStyle='rgba(8,23,37,.9)';ctx.fillRect(0,0,768,160);ctx.strokeStyle='#4386a5';ctx.strokeRect(2,2,764,156);ctx.fillStyle='#eafaff';ctx.textAlign='center';ctx.font='bold 35px system-ui';const s=String(text).slice(0,95);ctx.fillText(s.length>42?s.slice(0,41)+'…':s,384,95);const texture=new THREE.CanvasTexture(c);const m=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false});const spr=new THREE.Sprite(m);spr.scale.set(3.1,.65,1);return spr}
 function resize(w){const rect=w.canvas.getBoundingClientRect();const width=Math.max(1,rect.width),height=Math.max(1,rect.height);w.r.setSize(width,height,false);w.c.aspect=width/height;w.c.updateProjectionMatrix()}
 function frame(){for(const w of [main,live]){if(w===live&&!$('present').open)continue;resize(w);w.g.rotation.set(pitch,yaw,0);w.c.position.z=zoom;w.r.render(w.s,w.c)}requestAnimationFrame(frame)}frame();
