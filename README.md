@@ -50,7 +50,7 @@ The editor stores project metadata in localStorage and imported GLB bytes in bro
 
 ## Repository naming and discovery
 
-Recommended GitHub repository name: **`spatialforge-3d-presentation-studio`**.
+Recommended discoverable GitHub repository name: **`spatialforge-3d-presentation-studio`** (the current repository URL remains `tiger1818/Iron-man-` until renamed in GitHub settings).
 
 Suggested description: **Open-source-oriented 3D spatial presentation studio using Three.js, GLB model inspection, interactive annotations, evidence-derived charts, and gesture navigation.**
 
@@ -60,4 +60,4 @@ Suggested topics: `threejs`, `3d-presentation`, `spatial-computing`, `gltf`, `we
 
 ## Publishing checklist
 
-Before changing repository visibility, review the **complete Git history**, Actions secrets and variables, workflow permissions, third-party licenses, uploaded datasets/models, and any personal information. A README inspection is not a full security audit. Only then consider GitHub **Settings → General → Repository name** and **Settings → General → Danger Zone → Change repository visibility**. GitHub Pages can be enabled separately in **Settings → Pages**.
+The repository is now **public**. Review the **complete Git history**, Actions secrets and variables, workflow permissions, third-party licenses, uploaded datasets/models, and any personal information. A README inspection is not a full security audit. For better search discovery, rename it through GitHub **Settings → General → Repository name**; update the repository description and topics in the same settings area. GitHub Pages deployment requires separate configuration in **Settings → Pages**. GitHub Pages can be enabled separately in **Settings → Pages**.
