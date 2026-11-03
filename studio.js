@@ -107,11 +107,13 @@ async function loadModel(file){
  clearModel();
  activeModel=incoming;
  for(const [world,overlay] of [[main,$('modelLabels')],[live,$('presentLabels')]]){
-  const holder=new THREE.Group(),root=activeModel.root.clone(true);
+  const holder=new THREE.Group(),normalizer=new THREE.Group(),root=activeModel.root.clone(true);
   const factor=5.6/Math.max(activeModel.size.x,activeModel.size.y,activeModel.size.z,.001);
-  // Center in model-local coordinates before applying the uniform normalization scale.
-  root.scale.multiplyScalar(factor);root.position.sub(activeModel.center.clone().multiplyScalar(factor));
-  holder.add(root);world.s.add(holder);modelHolders.set(world,holder);modelOverlays.set(world,overlay);world.g.visible=false;world.labelKey='';
+  // Preserve imported root transforms: normalize in a separate wrapper, then rotate around centered pivot.
+  normalizer.scale.setScalar(factor);
+  normalizer.position.copy(activeModel.center).multiplyScalar(-factor);
+  normalizer.add(root);holder.add(normalizer);
+  world.s.add(holder);modelHolders.set(world,holder);modelOverlays.set(world,overlay);world.g.visible=false;world.labelKey='';
  }
  yaw=-.25;pitch=.15;zoom=12;
  $('modelInfo').textContent='Loaded '+file.name+' · '+activeModel.hierarchy.nodes.length+' nodes. Labels are model metadata, not verified facts. Model bytes are not included in project export.';
