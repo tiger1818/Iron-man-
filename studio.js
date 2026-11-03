@@ -100,8 +100,8 @@ async function loadModel(file,{restore=false}={}){
  if(!file.name.toLowerCase().endsWith('.glb'))throw Error('Only self-contained GLB supported');
  if(!file.size)throw Error('GLB is empty');
  if(file.size>25*1024*1024)throw Error('GLB maximum is 25 MB');
- if(!modelRuntime){const {GLTFLoader}=await import('https://esm.sh/three@0.170.0/examples/jsm/loaders/GLTFLoader.js');modelRuntime=createModelRuntime({THREE,GLTFLoader})}
  const generation=++modelLoadGeneration;
+ if(!modelRuntime){const {GLTFLoader}=await import('https://esm.sh/three@0.170.0/examples/jsm/loaders/GLTFLoader.js');if(generation!==modelLoadGeneration)return;modelRuntime=createModelRuntime({THREE,GLTFLoader})}
  const buffer=await file.arrayBuffer();
  if(generation!==modelLoadGeneration)return;
  if(buffer.byteLength<20||new DataView(buffer).getUint32(0,true)!==0x46546c67||new DataView(buffer).getUint32(4,true)!==2||new DataView(buffer).getUint32(8,true)!==buffer.byteLength)throw Error('Invalid glTF 2.0 binary header');
@@ -123,7 +123,7 @@ async function loadModel(file,{restore=false}={}){
  updateModel();
  if(!restore){try{const saved=await saveModelAsset({buffer,name:file.name});if(activeModel===incoming){deck.modelAsset=saved.hash;save()}}catch(error){status('Model loaded but asset storage failed: '+error.message)}}
 }
-$('modelFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{await loadModel(file);status('Real GLB model loaded. Drag to rotate and select component labels.')}catch(err){status('GLB import failed: '+err.message)}finally{e.target.value=''}};
+$('modelFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{await loadModel(file);if(activeModel?.sourceName===file.name)status('Real GLB model loaded. Drag to rotate and select component labels.')}catch(err){status('GLB import failed: '+err.message)}finally{e.target.value=''}};
 $('modelClear').onclick=()=>{clearModel();deck.modelAsset=null;save();$('modelInfo').textContent='Model removed; original scene restored.'};
 async function restoreModelFromProject(){
  const hash=deck.modelAsset;if(!hash)return;
