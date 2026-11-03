@@ -29,3 +29,12 @@ test('model runtime preserves component hierarchy and world anchors',async()=>{
  assert.equal(runtime.getAnchor('heart',node.id).y,3);
  assert.equal(runtime.dispose('heart'),true);
 });
+
+test('offscreen and behind-camera labels are never shown',()=>{
+ const r=placeAnnotations([{id:'behind',anchor:{x:400,y:250,behindCamera:true}},{id:'offscreen',anchor:{x:-2,y:250}},{id:'visible',anchor:{x:400,y:250}}],{width:1000,height:700});
+ assert.equal(r.annotations.length,1);assert.equal(r.annotations[0].id,'visible');assert.equal(r.hidden,2);
+});
+test('small screens use a fallback instead of drawing outside viewport',()=>{
+ const r=placeAnnotations([{id:'a',anchor:{x:100,y:100}}],{width:250,height:180});
+ assert.equal(r.hidden,1);assert.equal(r.annotations.length,0);assert.ok(r.warnings[0].includes('Viewport'));
+});
