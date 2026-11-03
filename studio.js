@@ -12,7 +12,7 @@ const saved=localStorage.getItem('spatial-studio-v1');try{if(saved)deck=validate
 function validate(d){if(!d||typeof d.title!=='string'||!Array.isArray(d.slides)||d.slides.length>100)throw Error('Invalid project');return {modelAsset:typeof d.modelAsset==='string'&&/^[a-f0-9]{64}$/.test(d.modelAsset)?d.modelAsset:null,evidence:Array.isArray(d.evidence)?d.evidence.slice(0,5000):[],warnings:Array.isArray(d.warnings)?d.warnings:[],sourceName:String(d.sourceName||'Unknown source'),title:d.title.slice(0,180),selected:clamp(Number(d.selected)||0,0,Math.max(0,d.slides.length-1)),slides:d.slides.map(s=>({id:String(s.id||uid()),title:String(s.title||'Untitled').slice(0,180),layout:['orbit','line','grid'].includes(s.layout)?s.layout:'orbit',notes:String(s.notes||'').slice(0,5000),kind:String(s.kind||'concept'),sourceIds:Array.isArray(s.sourceIds)?s.sourceIds:[],table:s.table||null,items:(Array.isArray(s.items)?s.items:[]).slice(0,60).map(n=>({id:String(n.id||uid()),text:String(n.text||'').slice(0,1000),sourceIds:Array.isArray(n.sourceIds)?n.sourceIds:[]}))}))}}
 const save=()=>{try{localStorage.setItem('spatial-studio-v1',JSON.stringify(deck));status('Saved locally. Export for backup.')}catch{status('Storage unavailable; export your project.')}};
 const status=t=>$('status').textContent=t;
-function generate(){const topic=$('topic').value.trim(),source=$('source').value.trim();if(!topic||!source)return status('Enter title and source content first.');if(deck.slides.length&&!confirm('Replace scenes? Export a backup first.'))return;try{const result=compileEvidence(source,{title:topic,sourceName:window.currentSourceName||'Pasted source'});deck={title:result.title,selected:0,slides:result.slides,evidence:result.evidence,warnings:result.warnings,sourceName:result.sourceName};render();save();status('Compiled '+result.slides.length+' source-grounded scenes, '+result.evidence.length+' evidence references. '+result.warnings.join(' '))}catch(err){status('Compilation failed: '+err.message)}}
+function generate(){const topic=$('topic').value.trim(),source=$('source').value.trim();if(!topic||!source)return status('Enter title and source content first.');if(deck.slides.length&&!confirm('Replace scenes? Export a backup first.'))return;try{const result=compileEvidence(source,{title:topic,sourceName:window.currentSourceName||'Pasted source'});deck={title:result.title,selected:0,slides:result.slides,evidence:result.evidence,warnings:result.warnings,sourceName:result.sourceName,modelAsset:deck.modelAsset||null};render();save();status('Compiled '+result.slides.length+' source-grounded scenes, '+result.evidence.length+' evidence references. '+result.warnings.join(' '))}catch(err){status('Compilation failed: '+err.message)}}
 function makeWorld(canvas){const r=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});r.setPixelRatio(Math.min(devicePixelRatio,2));r.outputColorSpace=THREE.SRGBColorSpace;const s=new THREE.Scene();const c=new THREE.PerspectiveCamera(50,1,.1,100);c.position.set(0,0,13);const g=new THREE.Group();s.add(g);s.add(new THREE.AmbientLight(0xffffff,1.5));const light=new THREE.PointLight(0x5bdcf8,80);light.position.set(3,5,7);s.add(light);return {r,s,c,g,canvas}}
 const main=makeWorld($('gl')), live=makeWorld($('presentCanvas'));let yaw=-.25,pitch=.15,zoom=13;
 const spatial=createSpatialRenderer(THREE);
@@ -107,7 +107,6 @@ async function loadModel(file,{restore=false}={}){
  if(generation!==modelLoadGeneration){modelRuntime.dispose(incoming.assetId);return}
  clearModel();
  activeModel=incoming;
- if(!restore){try{const saved=await saveModelAsset({buffer,name:file.name});deck.modelAsset=saved.hash;save()}catch(error){status('Model loaded, but local asset persistence failed: '+error.message)}}
  for(const [world,overlay] of [[main,$('modelLabels')],[live,$('presentLabels')]]){
   const holder=new THREE.Group(),normalizer=new THREE.Group(),root=activeModel.root.clone(true);
   const factor=5.6/Math.max(activeModel.size.x,activeModel.size.y,activeModel.size.z,.001);
@@ -118,8 +117,9 @@ async function loadModel(file,{restore=false}={}){
   world.s.add(holder);modelHolders.set(world,holder);modelOverlays.set(world,overlay);world.g.visible=false;world.labelKey='';
  }
  yaw=-.25;pitch=.15;zoom=12;
- $('modelInfo').textContent='Loaded '+file.name+' · '+activeModel.hierarchy.nodes.length+' nodes. Model stored locally when storage is available. JSON export references its hash but does not embed its bytes.';
+ $('modelInfo').textContent='Loaded '+file.name+' · '+activeModel.hierarchy.nodes.length+' nodes. Model is stored locally when available; JSON export references its hash.';
  updateModel();
+ if(!restore){try{const saved=await saveModelAsset({buffer,name:file.name});if(activeModel===incoming){deck.modelAsset=saved.hash;save()}}catch(error){status('Model loaded but asset storage failed: '+error.message)}}
 }
 $('modelFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{await loadModel(file);status('Real GLB model loaded. Drag to rotate and select component labels.')}catch(err){status('GLB import failed: '+err.message)}finally{e.target.value=''}};
 $('modelClear').onclick=()=>{clearModel();deck.modelAsset=null;save();$('modelInfo').textContent='Model removed; original scene restored.'};
