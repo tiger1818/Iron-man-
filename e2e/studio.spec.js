@@ -25,3 +25,16 @@ test('keyboard navigation and editor stay usable',async({page})=>{
  await page.locator('#prev').click();
  await expect(page.locator('#heading')).not.toHaveText('Second scene');
 });
+
+test('Home and End keyboard shortcuts navigate presentation scenes',async({page})=>{
+ await page.goto('/');
+ await expect(page.locator('#gl')).toBeVisible({timeout:30000});
+ await page.locator('#add').click();
+ await page.locator('#sceneTitle').fill('Keyboard destination');
+ await page.locator('#sceneTitle').blur();
+ await page.locator('body').click({position:{x:2,y:2}});
+ await page.keyboard.press('Home');
+ await expect(page.locator('#heading')).not.toHaveText('Keyboard destination');
+ await page.keyboard.press('End');
+ await expect(page.locator('#heading')).toHaveText('Keyboard destination');
+});
