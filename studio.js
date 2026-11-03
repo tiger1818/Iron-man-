@@ -5,10 +5,11 @@ import {chartSpec} from './visual-contract.js';
 import {createSpatialRenderer} from './spatial-renderer.js';
 import {createModelRuntime} from './architecture/model-runtime.js';
 import {placeAnnotations,projectAnchor} from './architecture/annotation-layout.js';
+import {saveModelAsset,loadModelAsset} from './architecture/model-asset-store.js';
 const $=id=>document.getElementById(id), uid=()=>crypto.randomUUID(), clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 let deck={title:'Spatial Presentation System',selected:0,slides:[]}, tracking=null;
 const saved=localStorage.getItem('spatial-studio-v1');try{if(saved)deck=validate(JSON.parse(saved))}catch{}
-function validate(d){if(!d||typeof d.title!=='string'||!Array.isArray(d.slides)||d.slides.length>100)throw Error('Invalid project');return {evidence:Array.isArray(d.evidence)?d.evidence.slice(0,5000):[],warnings:Array.isArray(d.warnings)?d.warnings:[],sourceName:String(d.sourceName||'Unknown source'),title:d.title.slice(0,180),selected:clamp(Number(d.selected)||0,0,Math.max(0,d.slides.length-1)),slides:d.slides.map(s=>({id:String(s.id||uid()),title:String(s.title||'Untitled').slice(0,180),layout:['orbit','line','grid'].includes(s.layout)?s.layout:'orbit',notes:String(s.notes||'').slice(0,5000),kind:String(s.kind||'concept'),sourceIds:Array.isArray(s.sourceIds)?s.sourceIds:[],table:s.table||null,items:(Array.isArray(s.items)?s.items:[]).slice(0,60).map(n=>({id:String(n.id||uid()),text:String(n.text||'').slice(0,1000),sourceIds:Array.isArray(n.sourceIds)?n.sourceIds:[]}))}))}}
+function validate(d){if(!d||typeof d.title!=='string'||!Array.isArray(d.slides)||d.slides.length>100)throw Error('Invalid project');return {modelAsset:typeof d.modelAsset==='string'&&/^[a-f0-9]{64}$/.test(d.modelAsset)?d.modelAsset:null,evidence:Array.isArray(d.evidence)?d.evidence.slice(0,5000):[],warnings:Array.isArray(d.warnings)?d.warnings:[],sourceName:String(d.sourceName||'Unknown source'),title:d.title.slice(0,180),selected:clamp(Number(d.selected)||0,0,Math.max(0,d.slides.length-1)),slides:d.slides.map(s=>({id:String(s.id||uid()),title:String(s.title||'Untitled').slice(0,180),layout:['orbit','line','grid'].includes(s.layout)?s.layout:'orbit',notes:String(s.notes||'').slice(0,5000),kind:String(s.kind||'concept'),sourceIds:Array.isArray(s.sourceIds)?s.sourceIds:[],table:s.table||null,items:(Array.isArray(s.items)?s.items:[]).slice(0,60).map(n=>({id:String(n.id||uid()),text:String(n.text||'').slice(0,1000),sourceIds:Array.isArray(n.sourceIds)?n.sourceIds:[]}))}))}}
 const save=()=>{try{localStorage.setItem('spatial-studio-v1',JSON.stringify(deck));status('Saved locally. Export for backup.')}catch{status('Storage unavailable; export your project.')}};
 const status=t=>$('status').textContent=t;
 function generate(){const topic=$('topic').value.trim(),source=$('source').value.trim();if(!topic||!source)return status('Enter title and source content first.');if(deck.slides.length&&!confirm('Replace scenes? Export a backup first.'))return;try{const result=compileEvidence(source,{title:topic,sourceName:window.currentSourceName||'Pasted source'});deck={title:result.title,selected:0,slides:result.slides,evidence:result.evidence,warnings:result.warnings,sourceName:result.sourceName};render();save();status('Compiled '+result.slides.length+' source-grounded scenes, '+result.evidence.length+' evidence references. '+result.warnings.join(' '))}catch(err){status('Compilation failed: '+err.message)}}
@@ -95,7 +96,7 @@ function updateModel(){
   if(world.labelKey!==key){world.labelKey=key;modelOverlay(world)}
  }
 }
-async function loadModel(file){
+async function loadModel(file,{restore=false}={}){
  if(!file.name.toLowerCase().endsWith('.glb'))throw Error('Only self-contained GLB supported');
  if(file.size>25*1024*1024)throw Error('GLB maximum is 25 MB');
  if(!modelRuntime){const {GLTFLoader}=await import('https://esm.sh/three@0.170.0/examples/jsm/loaders/GLTFLoader.js');modelRuntime=createModelRuntime({THREE,GLTFLoader})}
@@ -106,6 +107,7 @@ async function loadModel(file){
  if(generation!==modelLoadGeneration){modelRuntime.dispose(incoming.assetId);return}
  clearModel();
  activeModel=incoming;
+ if(!restore){try{const saved=await saveModelAsset({buffer,name:file.name});deck.modelAsset=saved.hash;save()}catch(error){status('Model loaded, but local asset persistence failed: '+error.message)}}
  for(const [world,overlay] of [[main,$('modelLabels')],[live,$('presentLabels')]]){
   const holder=new THREE.Group(),normalizer=new THREE.Group(),root=activeModel.root.clone(true);
   const factor=5.6/Math.max(activeModel.size.x,activeModel.size.y,activeModel.size.z,.001);
@@ -116,11 +118,18 @@ async function loadModel(file){
   world.s.add(holder);modelHolders.set(world,holder);modelOverlays.set(world,overlay);world.g.visible=false;world.labelKey='';
  }
  yaw=-.25;pitch=.15;zoom=12;
- $('modelInfo').textContent='Loaded '+file.name+' · '+activeModel.hierarchy.nodes.length+' nodes. Labels are model metadata, not verified facts. Model bytes are not included in project export.';
+ $('modelInfo').textContent='Loaded '+file.name+' · '+activeModel.hierarchy.nodes.length+' nodes. Model stored locally when storage is available. JSON export references its hash but does not embed its bytes.';
  updateModel();
 }
 $('modelFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{await loadModel(file);status('Real GLB model loaded. Drag to rotate and select component labels.')}catch(err){status('GLB import failed: '+err.message)}finally{e.target.value=''}};
-$('modelClear').onclick=()=>{clearModel();$('modelInfo').textContent='Model removed; original scene restored.'};
+$('modelClear').onclick=()=>{clearModel();deck.modelAsset=null;save();$('modelInfo').textContent='Model removed; original scene restored.'};
+async function restoreModelFromProject(){
+ const hash=deck.modelAsset;if(!hash)return;
+ try{const asset=await loadModelAsset(hash);if(!asset){status('Project references a model not stored on this device. Re-import its GLB file.');return}
+ await loadModel({name:asset.name,size:asset.byteLength,arrayBuffer:async()=>asset.buffer},{restore:true});
+ status('Restored locally saved 3D model '+asset.name);
+ }catch(error){status('Model restore failed: '+error.message)}
+}
 
 function sceneNodes(world,slide){const spec=slide?.table?chartSpec(slide.table):null;return spatial.render(world.g,slide,spec)}
 
@@ -136,10 +145,10 @@ $('sceneTitle').oninput=e=>{const s=deck.slides[deck.selected];if(!s)return;s.ti
 $('sceneTitle').onchange=render;$('layout').onchange=e=>{const s=deck.slides[deck.selected];if(s){s.layout=e.target.value;render();save()}};$('notes').oninput=e=>{const s=deck.slides[deck.selected];if(s){s.notes=e.target.value;save()}};
 $('reset').onclick=()=>{yaw=-.25;pitch=.15;zoom=13};$('new').onclick=()=>{if(!confirm('Start new project? Export first if you need a backup.'))return;clearModel();deck={title:'Untitled',selected:0,slides:[]};render();save()};
 $('save').onclick=()=>{const blob=new Blob([JSON.stringify(deck,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='spatial-project.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
-$('open').onclick=()=>$('projectFile').click();$('projectFile').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const d=validate(JSON.parse(await f.text()));if(!confirm('Replace current project?'))return;clearModel();deck=d;render();save()}catch(err){status('Invalid project: '+err.message)}e.target.value=''};
+$('open').onclick=()=>$('projectFile').click();$('projectFile').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const d=validate(JSON.parse(await f.text()));if(!confirm('Replace current project?'))return;clearModel();deck=d;render();save();await restoreModelFromProject()}catch(err){status('Invalid project: '+err.message)}e.target.value=''};
 $('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;status('Extracting '+f.name+'…');try{const result=await extractDocument(f);if(!result.text)throw Error('No extractable text found');$('source').value=result.text.slice(0,30000);window.currentSourceName=f.name;status('Extracted '+f.name+(result.pages?' ('+result.pages+' pages/slides/sheets)':'')+'. Review before generating. '+result.warnings.join(' '))}catch(err){status('Import failed: '+err.message)}finally{e.target.value=''}};
 $('show').onclick=()=>{if(!deck.slides.length)return status('Create a scene first.');$('present').showModal();resize(live)};$('close').onclick=()=>$('present').close();
 let dragging=false,lastX=0,lastY=0;for(const canvas of [$('gl'),$('presentCanvas')]){let downX=0,downY=0;canvas.addEventListener('pointerdown',e=>{dragging=true;lastX=downX=e.clientX;lastY=downY=e.clientY;canvas.setPointerCapture(e.pointerId)});canvas.addEventListener('pointermove',e=>{if(!dragging)return;yaw+=(e.clientX-lastX)*.008;pitch=clamp(pitch+(e.clientY-lastY)*.008,-1.2,1.2);lastX=e.clientX;lastY=e.clientY});canvas.addEventListener('pointerup',e=>{dragging=false;if(Math.hypot(e.clientX-downX,e.clientY-downY)<5)pickModel(canvas===$('gl')?main:live,e)});canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=clamp(zoom+e.deltaY*.01,5,26)},{passive:false})}
 document.addEventListener('keydown',e=>{if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;if(e.key==='ArrowRight'){e.preventDefault();navigate(1)}if(e.key==='ArrowLeft'){e.preventDefault();navigate(-1)}if(e.key===' '){e.preventDefault();if(!$('present').open)$('show').click();else navigate(1)}});
 $('camera').onclick=async()=>{if(tracking){tracking.stop();tracking=null;$('cam').hidden=true;$('camera').textContent='Enable hand tracking';return}try{const stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});const video=$('cam');video.srcObject=stream;video.hidden=false;await video.play();const {HandLandmarker,FilesetResolver}=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm');const vision=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');const modelAssetPath='https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';let detector;try{detector=await HandLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath,delegate:'GPU'},runningMode:'VIDEO',numHands:1})}catch{detector=await HandLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath,delegate:'CPU'},runningMode:'VIDEO',numHands:1})}let running=true,last=0,lastInference=0,pinchStart=0,cooldown=0;const loop=()=>{if(!running)return;try{const now=performance.now();if(video.readyState>=2&&video.currentTime!==last&&now-lastInference>=80){last=video.currentTime;lastInference=now;const result=detector.detectForVideo(video,now);const hand=result.landmarks?.[0];const dot=$('pointer');if(hand){const tip=hand[8],thumb=hand[4],dist=Math.hypot(tip.x-thumb.x,tip.y-thumb.y);dot.style.display='block';dot.style.left=(1-tip.x)*100+'%';dot.style.top=tip.y*100+'%';if(dist<.05){if(!pinchStart)pinchStart=performance.now();if(performance.now()-pinchStart>1100&&performance.now()>cooldown){navigate(1);cooldown=performance.now()+2200;pinchStart=0}}else pinchStart=0}else{dot.style.display='none';pinchStart=0}}}catch(e){status('Tracking error: '+e.message)}requestAnimationFrame(loop)};tracking={stop(){running=false;stream.getTracks().forEach(t=>t.stop());detector.close();video.srcObject=null;$('pointer').style.display='none'}};$('camera').textContent='Disable hand tracking';status('Hand tracking active. Hold index/thumb pinch for 1.1s to advance.');loop()}catch(e){$('cam').srcObject?.getTracks().forEach(t=>t.stop());$('cam').hidden=true;status('Camera unavailable: '+e.message)}};
-if(!deck.slides.length){deck.slides=[{id:uid(),title:'Spatial Studio',layout:'orbit',notes:'',items:['Live 3D renderer','Editable concepts','Keyboard fallback','Opt-in webcam tracking'].map(text=>({id:uid(),text}))}]};}render();save();
+if(!deck.slides.length){deck.slides=[{id:uid(),title:'Spatial Studio',layout:'orbit',notes:'',items:['Live 3D renderer','Editable concepts','Keyboard fallback','Opt-in webcam tracking'].map(text=>({id:uid(),text}))}]};}render();save();restoreModelFromProject();
