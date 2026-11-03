@@ -3,6 +3,8 @@
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export function placeAnnotations(annotations,{width,height,margin=24,cardWidth=240,cardHeight=82,gap=14,protectedRect=null}={}){
  if(!(width>0&&height>0))throw Error('Viewport required');
+ if(!(cardWidth>0&&cardHeight>0&&gap>=0&&margin>=0))throw Error('Invalid label geometry');
+ if(width<2*margin+cardWidth||height<2*margin+cardHeight)return {annotations:[],warnings:['Viewport too small: use accessible annotation list'],hidden:annotations.length};
  const safe=protectedRect||{x:width*.35,y:height*.1,width:width*.3,height:height*.8};
  const blocked=[safe];
  const result=[],warnings=[];
@@ -20,7 +22,7 @@ export function placeAnnotations(annotations,{width,height,margin=24,cardWidth=2
  };
  for(const annotation of annotations){
   const anchor=annotation.anchor;
-  if(!anchor||!Number.isFinite(anchor.x)||!Number.isFinite(anchor.y)){warnings.push('Annotation missing projected anchor: '+annotation.id);continue}
+  if(!anchor||!Number.isFinite(anchor.x)||!Number.isFinite(anchor.y)||anchor.behindCamera||anchor.x<0||anchor.y<0||anchor.x>width||anchor.y>height){warnings.push('Annotation missing projected anchor: '+annotation.id);continue}
   const slot=candidates(anchor).find(s=>!blocked.some(b=>intersects(s,b,gap)));
   if(!slot){warnings.push('Insufficient room for annotation: '+annotation.id);continue}
   blocked.push(slot);
