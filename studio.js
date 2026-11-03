@@ -145,6 +145,51 @@ $('sceneTitle').oninput=e=>{const s=deck.slides[deck.selected];if(!s)return;s.ti
 $('sceneTitle').onchange=render;$('layout').onchange=e=>{const s=deck.slides[deck.selected];if(s){s.layout=e.target.value;render();save()}};$('notes').oninput=e=>{const s=deck.slides[deck.selected];if(s){s.notes=e.target.value;save()}};
 $('reset').onclick=()=>{yaw=-.25;pitch=.15;zoom=13};$('new').onclick=()=>{if(!confirm('Start new project? Export first if you need a backup.'))return;clearModel();deck={title:'Untitled',selected:0,slides:[]};render();save()};
 $('save').onclick=()=>{const blob=new Blob([JSON.stringify(deck,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='spatial-project.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+
+async function zipLibrary(){const module=await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');return module.default}
+function downloadBlob(blob,filename){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500)}
+$('bundle').onclick=async()=>{
+ try{
+  status('Building portable bundle…');const JSZip=await zipLibrary(),zip=new JSZip();
+  zip.file('project.json',JSON.stringify(deck,null,2));
+  if(deck.modelAsset){
+   const asset=await loadModelAsset(deck.modelAsset);
+   if(!asset)throw Error('Referenced model missing locally. Re-import GLB before bundling.');
+   zip.file('model.glb',asset.buffer);
+  }
+  zip.file('manifest.json',JSON.stringify({format:'spatial-studio-bundle',version:1,modelHash:deck.modelAsset||null},null,2));
+  const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:4}});
+  downloadBlob(blob,'spatial-studio-portable.zip');status('Portable project bundle exported.');
+ }catch(error){status('Bundle export failed: '+error.message)}
+};
+$('openBundle').onclick=()=>$('bundleFile').click();
+$('bundleFile').onchange=async e=>{
+ const file=e.target.files?.[0];e.target.value='';if(!file)return;
+ try{
+  if(file.size>40*1024*1024)throw Error('Bundle exceeds 40 MB');
+  const JSZip=await zipLibrary(),zip=await JSZip.loadAsync(file);
+  const projectEntry=zip.file('project.json'),manifestEntry=zip.file('manifest.json');
+  if(!projectEntry||!manifestEntry)throw Error('Not a Spatial Studio bundle');
+  const limit=(entry,max)=>{if(entry?._data?.uncompressedSize>max)throw Error('Oversized bundle member')};
+  limit(projectEntry,5*1024*1024);limit(manifestEntry,65536);
+  const manifest=JSON.parse(await manifestEntry.async('string'));
+  if(manifest.format!=='spatial-studio-bundle'||manifest.version!==1)throw Error('Unsupported bundle version');
+  const incoming=validate(JSON.parse(await projectEntry.async('string')));
+  if(incoming.modelAsset!==manifest.modelHash)throw Error('Bundle manifest/model reference mismatch');
+  if(incoming.modelAsset){
+   const modelEntry=zip.file('model.glb');if(!modelEntry)throw Error('Model asset missing from bundle');
+   limit(modelEntry,25*1024*1024);
+   const bytes=await modelEntry.async('uint8array');
+   if(bytes.byteLength>25*1024*1024)throw Error('Model exceeds limit');
+   const buffer=bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
+   const stored=await saveModelAsset({buffer,name:'imported-model.glb'});
+   if(stored.hash!==incoming.modelAsset)throw Error('Model hash mismatch: bundle rejected');
+  }
+  if(!confirm('Replace current presentation with imported bundle?'))return;
+  clearModel();deck=incoming;render();save();await restoreModelFromProject();status('Portable bundle imported and verified.');
+ }catch(error){status('Bundle import failed: '+error.message)}
+};
+
 $('open').onclick=()=>$('projectFile').click();$('projectFile').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const d=validate(JSON.parse(await f.text()));if(!confirm('Replace current project?'))return;clearModel();deck=d;render();save();await restoreModelFromProject()}catch(err){status('Invalid project: '+err.message)}e.target.value=''};
 $('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;status('Extracting '+f.name+'…');try{const result=await extractDocument(f);if(!result.text)throw Error('No extractable text found');$('source').value=result.text.slice(0,30000);window.currentSourceName=f.name;status('Extracted '+f.name+(result.pages?' ('+result.pages+' pages/slides/sheets)':'')+'. Review before generating. '+result.warnings.join(' '))}catch(err){status('Import failed: '+err.message)}finally{e.target.value=''}};
 $('show').onclick=()=>{if(!deck.slides.length)return status('Create a scene first.');$('present').showModal();resize(live)};$('close').onclick=()=>$('present').close();
