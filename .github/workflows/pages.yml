@@ -47,9 +47,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # GitHub Pages must first be enabled by the repository owner in Settings → Pages.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - name: Package static site
         run: |
           mkdir -p _site/architecture
