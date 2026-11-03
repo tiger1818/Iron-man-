@@ -24,7 +24,7 @@ python3 -m http.server 4173
 
 Open **http://localhost:4173**. Import a GLB with **Import genuine 3D model**, or paste source content and choose **Generate scenes**. Choose **Present** to open the presenter view.
 
-## Development and verification
+## Release readiness\n\n**Current milestone: v0.1 public preview (release candidate).** This is not a final production release. The project has passed 34 unit/contract tests and 6 Chromium integration tests on commit `eb903971`; subsequent changes require fresh CI verification.\n\n**Owner action required to publish the live site:** open [Settings → Pages](https://github.com/tiger1818/Iron-man-/settings/pages), choose **GitHub Actions** under Build and deployment, and save. The GitHub Actions token cannot create the Pages site for this repository (`Resource not accessible by integration`). After enabling Pages, rerun **Validate and deploy SpatialForge** from the [Actions tab](https://github.com/tiger1818/Iron-man-/actions). The workflow will publish only if the unit and browser test gates pass.\n\nA successful CI run verifies specific workflows; it does not prove universal reliability. Before announcing a production release, test at least desktop Chrome/Edge/Firefox/Safari, camera permission denial and revocation, real presentation hardware, several external GLB files, file-format extraction, offline failure behavior, and accessibility.\n\n## Development and verification
 
 ```bash
 node --test tests/*.test.mjs
@@ -45,7 +45,7 @@ The editor stores project metadata in localStorage and imported GLB bytes in bro
 - The app does **not** synthesize scientifically accurate physical models from arbitrary text.
 - Model mesh names and annotations are imported metadata, **not independently verified facts**.
 - A JSON project export references a model by hash but does not embed its bytes; use the portable ZIP bundle to transfer the model.
-- Gesture recognition, model annotation occlusion, advanced cinematography, accessibility, device compatibility, and full production reliability require further validation.
+- Gesture recognition currently supports **hold-pinch to advance** only; grab, spread, fist, and other gestures are not yet implemented. Model annotation occlusion, advanced cinematography, accessibility, device compatibility, and full production reliability require further validation.
 - This repository has not undergone a complete third-party security or dependency audit.
 
 ## Repository naming and discovery
