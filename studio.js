@@ -65,7 +65,7 @@ function modelOverlay(world){
  const overlay=modelOverlays.get(world),holder=modelHolders.get(world);if(!overlay||!holder)return;
  const rect=world.canvas.getBoundingClientRect(),width=rect.width,height=rect.height;
  if(width<320||height<240){overlay.replaceChildren();return}
- const root=holder.children[0];holder.updateMatrixWorld(true);
+ const root=holder.children[0];world.c.updateMatrixWorld();holder.updateMatrixWorld(true);
  const candidates=[];
  for(const entry of activeModel.hierarchy.nodes.filter(n=>n.mesh).slice(0,12)){
   let object=null;root.traverse(o=>{if(o.userData?.spatialNodeId===entry.id)object=o});
@@ -98,11 +98,13 @@ function updateModel(){
 }
 async function loadModel(file,{restore=false}={}){
  if(!file.name.toLowerCase().endsWith('.glb'))throw Error('Only self-contained GLB supported');
+ if(!file.size)throw Error('GLB is empty');
  if(file.size>25*1024*1024)throw Error('GLB maximum is 25 MB');
  if(!modelRuntime){const {GLTFLoader}=await import('https://esm.sh/three@0.170.0/examples/jsm/loaders/GLTFLoader.js');modelRuntime=createModelRuntime({THREE,GLTFLoader})}
  const generation=++modelLoadGeneration;
  const buffer=await file.arrayBuffer();
  if(generation!==modelLoadGeneration)return;
+ if(buffer.byteLength<20||new DataView(buffer).getUint32(0,true)!==0x46546c67||new DataView(buffer).getUint32(4,true)!==2||new DataView(buffer).getUint32(8,true)!==buffer.byteLength)throw Error('Invalid glTF 2.0 binary header');
  const incoming=await modelRuntime.loadArrayBuffer({assetId:uid(),buffer,sourceName:file.name});
  if(generation!==modelLoadGeneration){modelRuntime.dispose(incoming.assetId);return}
  clearModel();
@@ -134,7 +136,7 @@ async function restoreModelFromProject(){
 function sceneNodes(world,slide){const spec=slide?.table?chartSpec(slide.table):null;return spatial.render(world.g,slide,spec)}
 
 function resize(w){const rect=w.canvas.getBoundingClientRect();const width=Math.max(1,rect.width),height=Math.max(1,rect.height);w.r.setSize(width,height,false);w.c.aspect=width/height;w.c.updateProjectionMatrix()}
-function frame(){for(const w of [main,live]){if(w===live&&!$('present').open)continue;const rect=w.canvas.getBoundingClientRect();if(rect.width<1||rect.height<1)continue;const width=Math.round(rect.width),height=Math.round(rect.height);if(w.width!==width||w.height!==height){resize(w);w.width=width;w.height=height}w.g.rotation.set(pitch,yaw,0);w.c.position.z=zoom;}updateModel();for(const w of [main,live]){if(w===live&&!$('present').open)continue;if(w.width&&w.height)w.r.render(w.s,w.c)}}main.r.setAnimationLoop(frame);
+function frame(){for(const w of [main,live]){if(w===live&&!$('present').open)continue;const rect=w.canvas.getBoundingClientRect();if(rect.width<1||rect.height<1)continue;const width=Math.round(rect.width),height=Math.round(rect.height);if(w.width!==width||w.height!==height){resize(w);w.width=width;w.height=height}w.g.rotation.set(pitch,yaw,0);w.c.position.z=zoom;w.c.updateMatrixWorld();}updateModel();for(const w of [main,live]){if(w===live&&!$('present').open)continue;if(w.width&&w.height)w.r.render(w.s,w.c)}}main.r.setAnimationLoop(frame);
 function render(){deck.selected=clamp(deck.selected,0,Math.max(0,deck.slides.length-1));$('topic').value=deck.title;const s=deck.slides[deck.selected];$('heading').textContent=s?s.title:'No scenes';$('presentTitle').textContent=s?.title||deck.title;$('counter').textContent=deck.slides.length?(deck.selected+1)+' / '+deck.slides.length:'0 / 0';$('sceneTitle').value=s?.title||'';$('layout').value=s?.layout||'orbit';$('notes').value=s?.notes||'';const panel=$('dataPanel');panel.replaceChildren();if(s?.table){const table=document.createElement('table'),thead=document.createElement('thead'),head=document.createElement('tr');for(const value of s.table.headers){const th=document.createElement('th');th.textContent=value;head.append(th)}thead.append(head);table.append(thead);const tbody=document.createElement('tbody');for(const row of s.table.rows){const tr=document.createElement('tr');for(const value of row){const td=document.createElement('td');td.textContent=value;tr.append(td)}tbody.append(tr)}table.append(tbody);panel.append(table);const note=document.createElement('small');note.textContent='Source: '+(deck.sourceName||'Imported content')+' · Exact extracted values; no inferred numbers.';panel.prepend(note)}for(const w of [main,live]){sceneNodes(w,s);w.g.visible=!activeModel}$('scenes').replaceChildren();deck.slides.forEach((item,i)=>{const b=document.createElement('button');b.className='scene'+(i===deck.selected?' active':'');b.textContent=(i+1)+'. '+item.title;b.onclick=()=>{deck.selected=i;render();save()};$('scenes').append(b)});$('nodes').replaceChildren();s?.items.forEach((n,i)=>{const inp=document.createElement('textarea');inp.rows=2;inp.value=n.text;inp.setAttribute('aria-label','Node '+(i+1));inp.oninput=()=>{if(n.text!==inp.value){n.text=inp.value;n.sourceIds=[];s.sourceIds=[...new Set(s.items.flatMap(item=>item.sourceIds||[]))];if(!s.notes.includes('Edited content requires source verification.'))s.notes=(s.notes?s.notes+'\n':'')+'Edited content requires source verification.';sceneNodes(main,s);sceneNodes(live,s);save()}};$('nodes').append(inp)})}
 function navigate(step){if(!deck.slides.length)return;deck.selected=(deck.selected+step+deck.slides.length)%deck.slides.length;render();save()}
 $('generate').onclick=generate;$('prev').onclick=$('pPrev').onclick=()=>navigate(-1);$('next').onclick=$('pNext').onclick=()=>navigate(1);
