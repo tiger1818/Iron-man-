@@ -17,8 +17,43 @@ const main=makeWorld($('gl')), live=makeWorld($('presentCanvas'));let yaw=-.25,p
 const spatial=createSpatialRenderer(THREE);
 let modelRuntime=null,activeModel=null,selectedModelNode=null,modelLoadGeneration=0;
 const modelHolders=new Map(),modelOverlays=new Map();
+const modelRaycaster=new THREE.Raycaster(),modelPointer=new THREE.Vector2();
+function selectModelComponent(id){
+ selectedModelNode=id;
+ for(const [world,holder] of modelHolders){
+  holder.traverse(o=>{if(!o.isMesh)return;
+   if(o.userData.spatialHighlightMaterial){o.material=o.userData.spatialOriginalMaterial;delete o.userData.spatialHighlightMaterial;delete o.userData.spatialOriginalMaterial}
+   if(id&&o.userData.spatialNodeId===id){
+    const original=o.material;
+    const highlight=m=>{const c=m.clone();if(c.emissive){c.emissive.set(0x29c4ef);c.emissiveIntensity=.5}return c};
+    o.material=Array.isArray(original)?original.map(highlight):highlight(original);
+    o.userData.spatialOriginalMaterial=original;o.userData.spatialHighlightMaterial=true;
+   }
+  });
+  world.labelKey='';
+ }
+ const name=activeModel?.hierarchy.byPath.get(id)?.name||'None';
+ $('modelInfo').textContent=id?'Selected component: '+name+' (model metadata; source verification required).':'No model component selected.';
+}
+function pickModel(world,event){
+ if(!activeModel)return;
+ const holder=modelHolders.get(world);if(!holder)return;
+ const bounds=world.canvas.getBoundingClientRect();if(!bounds.width||!bounds.height)return;
+ modelPointer.set((event.clientX-bounds.left)/bounds.width*2-1,-(event.clientY-bounds.top)/bounds.height*2+1);
+ modelRaycaster.setFromCamera(modelPointer,world.c);
+ const hits=modelRaycaster.intersectObject(holder,true);
+ const hit=hits.find(h=>h.object.userData?.spatialNodeId);
+ if(hit)selectModelComponent(hit.object.userData.spatialNodeId);
+}
+function resetModelHighlight(){for(const holder of modelHolders.values())holder.traverse(o=>{
+ if(!o.userData?.spatialHighlightMaterial)return;
+ const highlighted=Array.isArray(o.material)?o.material:[o.material];for(const material of highlighted)material.dispose();
+ o.material=o.userData.spatialOriginalMaterial;delete o.userData.spatialHighlightMaterial;delete o.userData.spatialOriginalMaterial;
+})}
+
 function clearModel(){
  modelLoadGeneration++;
+ resetModelHighlight();
  for(const [world,holder] of modelHolders){holder.removeFromParent();world.g.visible=true}
  modelHolders.clear();for(const overlay of modelOverlays.values())overlay.replaceChildren();modelOverlays.clear();
  if(activeModel)modelRuntime.dispose(activeModel.assetId);
@@ -46,7 +81,7 @@ function modelOverlay(world){
   line.setAttribute('points',p.from.x+','+p.from.y+' '+p.elbow.x+','+p.elbow.y+' '+p.to.x+','+p.to.y);
   line.setAttribute('fill','none');line.setAttribute('stroke',a.nodeId===selectedModelNode?'#8cefff':'#427f9d');line.setAttribute('stroke-width','1.5');svg.append(line);
   const btn=document.createElement('button');btn.className='model-annotation'+(a.nodeId===selectedModelNode?' active':'');btn.style.left=a.rect.x+'px';btn.style.top=a.rect.y+'px';btn.style.width=a.rect.width+'px';btn.textContent=a.text;
-  btn.onclick=()=>{selectedModelNode=a.nodeId;$('modelInfo').textContent='Selected component: '+a.text+' (asset name, not verified scientific evidence).';for(const w of modelHolders.keys())w.labelKey=''};
+  btn.onclick=()=>selectModelComponent(a.nodeId);
   overlay.append(btn);
  }
  overlay.prepend(svg);
@@ -102,7 +137,7 @@ $('save').onclick=()=>{const blob=new Blob([JSON.stringify(deck,null,2)],{type:'
 $('open').onclick=()=>$('projectFile').click();$('projectFile').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const d=validate(JSON.parse(await f.text()));if(!confirm('Replace current project?'))return;clearModel();deck=d;render();save()}catch(err){status('Invalid project: '+err.message)}e.target.value=''};
 $('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;status('Extracting '+f.name+'…');try{const result=await extractDocument(f);if(!result.text)throw Error('No extractable text found');$('source').value=result.text.slice(0,30000);window.currentSourceName=f.name;status('Extracted '+f.name+(result.pages?' ('+result.pages+' pages/slides/sheets)':'')+'. Review before generating. '+result.warnings.join(' '))}catch(err){status('Import failed: '+err.message)}finally{e.target.value=''}};
 $('show').onclick=()=>{if(!deck.slides.length)return status('Create a scene first.');$('present').showModal();resize(live)};$('close').onclick=()=>$('present').close();
-let dragging=false,lastX=0,lastY=0;for(const canvas of [$('gl'),$('presentCanvas')]){canvas.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;canvas.setPointerCapture(e.pointerId)});canvas.addEventListener('pointermove',e=>{if(!dragging)return;yaw+=(e.clientX-lastX)*.008;pitch=clamp(pitch+(e.clientY-lastY)*.008,-1.2,1.2);lastX=e.clientX;lastY=e.clientY});canvas.addEventListener('pointerup',()=>dragging=false);canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=clamp(zoom+e.deltaY*.01,5,26)},{passive:false})}
+let dragging=false,lastX=0,lastY=0;for(const canvas of [$('gl'),$('presentCanvas')]){let downX=0,downY=0;canvas.addEventListener('pointerdown',e=>{dragging=true;lastX=downX=e.clientX;lastY=downY=e.clientY;canvas.setPointerCapture(e.pointerId)});canvas.addEventListener('pointermove',e=>{if(!dragging)return;yaw+=(e.clientX-lastX)*.008;pitch=clamp(pitch+(e.clientY-lastY)*.008,-1.2,1.2);lastX=e.clientX;lastY=e.clientY});canvas.addEventListener('pointerup',e=>{dragging=false;if(Math.hypot(e.clientX-downX,e.clientY-downY)<5)pickModel(canvas===$('gl')?main:live,e)});canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=clamp(zoom+e.deltaY*.01,5,26)},{passive:false})}
 document.addEventListener('keydown',e=>{if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;if(e.key==='ArrowRight'){e.preventDefault();navigate(1)}if(e.key==='ArrowLeft'){e.preventDefault();navigate(-1)}if(e.key===' '){e.preventDefault();if(!$('present').open)$('show').click();else navigate(1)}});
 $('camera').onclick=async()=>{if(tracking){tracking.stop();tracking=null;$('cam').hidden=true;$('camera').textContent='Enable hand tracking';return}try{const stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});const video=$('cam');video.srcObject=stream;video.hidden=false;await video.play();const {HandLandmarker,FilesetResolver}=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm');const vision=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');const modelAssetPath='https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';let detector;try{detector=await HandLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath,delegate:'GPU'},runningMode:'VIDEO',numHands:1})}catch{detector=await HandLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath,delegate:'CPU'},runningMode:'VIDEO',numHands:1})}let running=true,last=0,lastInference=0,pinchStart=0,cooldown=0;const loop=()=>{if(!running)return;try{const now=performance.now();if(video.readyState>=2&&video.currentTime!==last&&now-lastInference>=80){last=video.currentTime;lastInference=now;const result=detector.detectForVideo(video,now);const hand=result.landmarks?.[0];const dot=$('pointer');if(hand){const tip=hand[8],thumb=hand[4],dist=Math.hypot(tip.x-thumb.x,tip.y-thumb.y);dot.style.display='block';dot.style.left=(1-tip.x)*100+'%';dot.style.top=tip.y*100+'%';if(dist<.05){if(!pinchStart)pinchStart=performance.now();if(performance.now()-pinchStart>1100&&performance.now()>cooldown){navigate(1);cooldown=performance.now()+2200;pinchStart=0}}else pinchStart=0}else{dot.style.display='none';pinchStart=0}}}catch(e){status('Tracking error: '+e.message)}requestAnimationFrame(loop)};tracking={stop(){running=false;stream.getTracks().forEach(t=>t.stop());detector.close();video.srcObject=null;$('pointer').style.display='none'}};$('camera').textContent='Disable hand tracking';status('Hand tracking active. Hold index/thumb pinch for 1.1s to advance.');loop()}catch(e){$('cam').srcObject?.getTracks().forEach(t=>t.stop());$('cam').hidden=true;status('Camera unavailable: '+e.message)}};
 if(!deck.slides.length){deck.slides=[{id:uid(),title:'Spatial Studio',layout:'orbit',notes:'',items:['Live 3D renderer','Editable concepts','Keyboard fallback','Opt-in webcam tracking'].map(text=>({id:uid(),text}))}]};}render();save();
