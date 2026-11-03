@@ -74,7 +74,7 @@ function modelOverlay(world){
   const anchor=projectAnchor(bounds.getCenter(new THREE.Vector3()),world.c,{width,height},THREE);
   if(!anchor.behindCamera)candidates.push({id:entry.id,nodeId:entry.id,assetId:activeModel.assetId,anchor,text:entry.name});
  }
- const result=placeAnnotations(candidates,{width,height,margin:12,cardWidth:Math.min(190,width*.24),cardHeight:62,gap:9,protectedRect:{x:width*.27,y:height*.08,width:width*.46,height:height*.84}});
+ const result=placeAnnotations(candidates,{width,height,margin:12,cardWidth:Math.min(170,width*.20),cardHeight:62,gap:9,protectedRect:{x:width*.28,y:height*.08,width:width*.44,height:height*.84}});
  overlay.replaceChildren();
  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 '+width+' '+height);svg.setAttribute('class','model-connector');
  for(const a of result.annotations){
